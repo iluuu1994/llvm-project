@@ -2396,7 +2396,6 @@ genImplicitDefaultDeclareMapper(lower::AbstractConverter &converter,
                                 mlir::Location loc, fir::RecordType recordType,
                                 llvm::StringRef mapperNameStr) {
   fir::FirOpBuilder &firOpBuilder = converter.getFirOpBuilder();
-  lower::StatementContext stmtCtx;
 
   // Save current insertion point before moving to the module scope to create
   // the DeclareMapperOp
@@ -2504,7 +2503,6 @@ genImplicitDefaultDeclareMapper(lower::AbstractConverter &converter,
   clauseOps.mapVars.emplace_back(mapOp);
 
   firOpBuilder.create<mlir::omp::DeclareMapperInfoOp>(loc, clauseOps.mapVars);
-  // declMapperOp->dumpPretty();
   return mlir::FlatSymbolRefAttr::get(&converter.getMLIRContext(),
                                       mapperNameStr);
 }
@@ -3571,7 +3569,6 @@ genOMP(lower::AbstractConverter &converter, lower::SymMap &symTable,
   ClauseProcessor cp(converter, semaCtx, clauses);
   cp.processMap(loc, stmtCtx, clauseOps);
   firOpBuilder.create<mlir::omp::DeclareMapperInfoOp>(loc, clauseOps.mapVars);
-  // declMapperOp->dumpPretty();
 }
 
 static void

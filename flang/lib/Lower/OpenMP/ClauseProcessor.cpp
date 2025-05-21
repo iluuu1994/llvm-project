@@ -1167,19 +1167,26 @@ void ClauseProcessor::processMapObjects(
 
   auto getDefaultMapperID = [&](const omp::Object &object,
                                 std::string &mapperIdName) {
-    const semantics::DerivedTypeSpec *typeSpec = nullptr;
+    if (!mlir::isa<mlir::omp::DeclareMapperOp>(
+            firOpBuilder.getRegion().getParentOp())) {
+      const semantics::DerivedTypeSpec *typeSpec = nullptr;
 
-    if (object.sym()->GetType() && object.sym()->GetType()->category() ==
-                                       semantics::DeclTypeSpec::TypeDerived)
-      typeSpec = &object.sym()->GetType()->derivedTypeSpec();
-    else if (object.sym()->owner().IsDerivedType())
-      typeSpec = object.sym()->owner().derivedTypeSpec();
+      if (object.sym()->owner().IsDerivedType())
+        typeSpec = object.sym()->owner().derivedTypeSpec();
+      else if (object.sym()->GetType() &&
+               object.sym()->GetType()->category() ==
+                   semantics::DeclTypeSpec::TypeDerived)
+        typeSpec = &object.sym()->GetType()->derivedTypeSpec();
 
-    if (typeSpec) {
-      mapperIdName =
-          typeSpec->name().ToString() + llvm::omp::OmpDefaultMapperName;
-      if (auto *sym = converter.getCurrentScope().FindSymbol(mapperIdName))
-        mapperIdName = converter.mangleName(mapperIdName, sym->owner());
+      if (typeSpec) {
+        mapperIdName =
+            typeSpec->name().ToString() + llvm::omp::OmpDefaultMapperName;
+        if (auto *sym = converter.getCurrentScope().FindSymbol(mapperIdName))
+          mapperIdName = converter.mangleName(mapperIdName, sym->owner());
+        else
+          mapperIdName =
+              converter.mangleName(mapperIdName, *typeSpec->GetScope());
+      }
     }
 
     // Make sure we don't return a mapper to self
