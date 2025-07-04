@@ -1189,7 +1189,7 @@ void ClauseProcessor::processMapObjects(
       }
     }
 
-    // Make sure we don't return a mapper to self
+    // Make sure we don't return a mapper to self.
     llvm::StringRef parentOpName;
     if (auto declMapOp = mlir::dyn_cast<mlir::omp::DeclareMapperOp>(
             firOpBuilder.getRegion().getParentOp()))
@@ -1299,7 +1299,7 @@ bool ClauseProcessor::processMap(
         llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_NONE;
     std::string mapperIdName = "__implicit_mapper";
     // If the map type is specified, then process it else set the appropriate
-    // default value
+    // default value.
     Map::MapType type;
     if (directive == llvm::omp::Directive::OMPD_target_enter_data &&
         semaCtx.langOptions().OpenMPVersion >= 52)

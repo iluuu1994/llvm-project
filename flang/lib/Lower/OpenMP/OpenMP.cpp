@@ -2391,14 +2391,17 @@ genSingleOp(lower::AbstractConverter &converter, lower::SymMap &symTable,
       queue, item, clauseOps);
 }
 
-static mlir::FlatSymbolRefAttr
-genImplicitDefaultDeclareMapper(lower::AbstractConverter &converter,
-                                mlir::Location loc, fir::RecordType recordType,
-                                llvm::StringRef mapperNameStr) {
+static mlir::FlatSymbolRefAttr getOrGenImplicitDefaultDeclareMapper(
+    lower::AbstractConverter &converter, mlir::Location loc,
+    fir::RecordType recordType, llvm::StringRef mapperNameStr) {
+  if (converter.getModuleOp().lookupSymbol(mapperNameStr))
+    return mlir::FlatSymbolRefAttr::get(&converter.getMLIRContext(),
+                                        mapperNameStr);
+
   fir::FirOpBuilder &firOpBuilder = converter.getFirOpBuilder();
 
   // Save current insertion point before moving to the module scope to create
-  // the DeclareMapperOp
+  // the DeclareMapperOp.
   mlir::OpBuilder::InsertionGuard guard(firOpBuilder);
 
   firOpBuilder.setInsertionPointToStart(converter.getModuleOp().getBody());
@@ -2429,11 +2432,8 @@ genImplicitDefaultDeclareMapper(lower::AbstractConverter &converter,
   // Return a reference to the contents of a derived type with one field.
   // Also return the field type.
   const auto getFieldRef =
-      [&](mlir::Value rec,
-          unsigned index) -> std::tuple<mlir::Value, mlir::Type> {
-    auto recType = mlir::dyn_cast<fir::RecordType>(
-        fir::unwrapPassByRefType(rec.getType()));
-    auto [fieldName, fieldTy] = recType.getTypeList()[index];
+      [&](mlir::Value rec, llvm::StringRef fieldName, mlir::Type fieldTy,
+          mlir::Type recType) -> std::tuple<mlir::Value, mlir::Type> {
     mlir::Value field = firOpBuilder.create<fir::FieldIndexOp>(
         loc, fir::FieldType::get(recType.getContext()), fieldName, recType,
         fir::getTypeParams(rec));
@@ -2452,33 +2452,32 @@ genImplicitDefaultDeclareMapper(lower::AbstractConverter &converter,
       llvm::omp::OpenMPOffloadMappingFlags::OMP_MAP_IMPLICIT;
   mlir::omp::VariableCaptureKind captureKind =
       mlir::omp::VariableCaptureKind::ByRef;
-  int64_t index = 0;
 
   // Populate the declareMapper region with the map information.
-  for (const auto &[memberName, memberType] :
-       mlir::dyn_cast<fir::RecordType>(recordType).getTypeList()) {
-    auto [ref, type] = getFieldRef(declareOp.getBase(), index);
+  for (const auto &entry : llvm::enumerate(
+           mlir::dyn_cast<fir::RecordType>(recordType).getTypeList())) {
+    const auto &memberName = entry.value().first;
+    const auto &memberType = entry.value().second;
+    auto [ref, type] =
+        getFieldRef(declareOp.getBase(), memberName, memberType, recordType);
     mlir::FlatSymbolRefAttr mapperId;
     if (auto recType = mlir::dyn_cast<fir::RecordType>(memberType)) {
       std::string mapperIdName =
-          recType.getName().str() + ".omp.default.mapper";
+          recType.getName().str() + llvm::omp::OmpDefaultMapperName;
       if (auto *sym = converter.getCurrentScope().FindSymbol(mapperIdName))
         mapperIdName = converter.mangleName(mapperIdName, sym->owner());
       else if (auto *sym = converter.getCurrentScope().FindSymbol(memberName))
         mapperIdName = converter.mangleName(mapperIdName, sym->owner());
 
-      if (converter.getModuleOp().lookupSymbol(mapperIdName))
-        mapperId = mlir::FlatSymbolRefAttr::get(&converter.getMLIRContext(),
-                                                mapperIdName);
-      else
-        mapperId = genImplicitDefaultDeclareMapper(converter, loc, recType,
-                                                   mapperIdName);
+      mapperId = getOrGenImplicitDefaultDeclareMapper(converter, loc, recType,
+                                                      mapperIdName);
     }
 
     llvm::SmallVector<mlir::Value> bounds;
     genBoundsOps(ref, bounds);
     mlir::Value mapOp = createMapInfoOp(
-        firOpBuilder, loc, ref, /*varPtrPtr=*/mlir::Value{}, "", bounds,
+        firOpBuilder, loc, ref, /*varPtrPtr=*/mlir::Value{}, /*name=*/"",
+        bounds,
         /*members=*/{},
         /*membersIndex=*/mlir::ArrayAttr{},
         static_cast<
@@ -2486,7 +2485,8 @@ genImplicitDefaultDeclareMapper(lower::AbstractConverter &converter,
             mapFlag),
         captureKind, ref.getType(), /*partialMap=*/false, mapperId);
     memberMapOps.emplace_back(mapOp);
-    memberPlacementIndices.emplace_back(llvm::SmallVector<int64_t>{index++});
+    memberPlacementIndices.emplace_back(
+        llvm::SmallVector<int64_t>{(int64_t)entry.index()});
   }
 
   llvm::SmallVector<mlir::Value> bounds;
@@ -2597,12 +2597,11 @@ genTargetOp(lower::AbstractConverter &converter, lower::SymMap &symTable,
         if (converter.getModuleOp().lookupSymbol(mapperIdName))
           mapperId = mlir::FlatSymbolRefAttr::get(&converter.getMLIRContext(),
                                                   mapperIdName);
-        else
-          mapperId = genImplicitDefaultDeclareMapper(
-              converter, loc,
-              mlir::cast<fir::RecordType>(
-                  converter.genType(sym.GetType()->derivedTypeSpec())),
-              mapperIdName);
+        mapperId = getOrGenImplicitDefaultDeclareMapper(
+            converter, loc,
+            mlir::cast<fir::RecordType>(
+                converter.genType(sym.GetType()->derivedTypeSpec())),
+            mapperIdName);
       }
 
       fir::factory::AddrAndBoundsInfo info =
