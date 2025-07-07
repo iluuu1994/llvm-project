@@ -419,19 +419,18 @@ bool AMDGPURegBankCombinerImpl::lowerUniformBFX(MachineInstr &MI) const {
   // Pack the offset and width of a BFE into
   // the format expected by the S_BFE_I32 / S_BFE_U32. In the second
   // source, bits [5:0] contain the offset and bits [22:16] the width.
-
-  // Ensure the high bits are clear to insert the offset.
-  auto OffsetMask = B.buildConstant(S32, maskTrailingOnes<unsigned>(6));
-  auto ClampOffset = B.buildAnd(S32, OffsetReg, OffsetMask);
+  // The 64 bit variants use bits [6:0]
+  //
+  // If the value takes more than 5/6 bits, the G_U/SBFX is ill-formed.
+  // Thus, we do not clamp the values. We assume they are in range,
+  // and if they aren't, it is UB anyway.
 
   // Zeros out the low bits, so don't bother clamping the input value.
   auto ShiftAmt = B.buildConstant(S32, 16);
   auto ShiftWidth = B.buildShl(S32, WidthReg, ShiftAmt);
 
-  auto MergedInputs = B.buildOr(S32, ClampOffset, ShiftWidth);
+  auto MergedInputs = B.buildOr(S32, OffsetReg, ShiftWidth);
 
-  MRI.setRegBank(OffsetMask.getReg(0), *RB);
-  MRI.setRegBank(ClampOffset.getReg(0), *RB);
   MRI.setRegBank(ShiftAmt.getReg(0), *RB);
   MRI.setRegBank(ShiftWidth.getReg(0), *RB);
   MRI.setRegBank(MergedInputs.getReg(0), *RB);
