@@ -643,8 +643,10 @@ join(llvm::ImmutableMap<K, V> A, llvm::ImmutableMap<K, V> B,
   for (const auto &Entry : B) {
     const K &Key = Entry.first;
     const V &ValB = Entry.second;
-    const V &ValA = *A.lookup(Key);
-    A = F.add(A, Key, joinValues(ValA, ValB));
+    if (const V *ValA = A.lookup(Key))
+      A = F.add(A, Key, joinValues(*ValA, ValB));
+    else
+      A = F.add(A, Key, ValB);
   }
   return A;
 }
@@ -719,7 +721,7 @@ public:
 
   using DataflowAnalysis<LoanPropagationAnalysis, Lattice>::transfer;
 
-  const char *getAnalysisName() const { return "Loan Propagation"; }
+  StringRef getAnalysisName() const { return "LoanPropagation"; }
 
   Lattice getInitialState() { return Lattice{}; }
 
