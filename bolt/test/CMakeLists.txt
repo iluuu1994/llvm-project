@@ -39,6 +39,7 @@ list(APPEND BOLT_TEST_DEPS
   llvm-bolt
   llvm-bolt-binary-analysis
   llvm-bolt-heatmap
+  llvm-bolt-align
   llvm-bat-dump
   llvm-dwarfdump
   llvm-dwp

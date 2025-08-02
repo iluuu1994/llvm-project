@@ -44,6 +44,7 @@ extern llvm::cl::OptionCategory AggregatorCategory;
 extern llvm::cl::OptionCategory BoltInstrCategory;
 extern llvm::cl::OptionCategory HeatmapCategory;
 extern llvm::cl::OptionCategory BinaryAnalysisCategory;
+extern llvm::cl::OptionCategory AlignCategory;
 
 extern llvm::cl::opt<unsigned> AlignText;
 extern llvm::cl::opt<unsigned> AlignFunctions;

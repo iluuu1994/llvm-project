@@ -440,6 +440,12 @@ private:
   /// Function order for streaming into the destination binary.
   uint32_t Index{-1U};
 
+  /// Number of bytes of padding to insert before streaming into destination binary.
+  size_t PaddingBefore{0};
+
+  /// Number of bytes of padding to insert after streaming into destination binary.
+  size_t PaddingAfter{0};
+
   /// Function is referenced by a non-control flow instruction.
   bool HasAddressTaken{false};
 
@@ -1126,6 +1132,18 @@ public:
   void setIndex(uint32_t Idx) {
     assert(!hasValidIndex());
     Index = Idx;
+  }
+
+  size_t getPaddingBefore() const { return PaddingBefore; }
+
+  void setPaddingBefore(size_t Padding) {
+    PaddingBefore = Padding;
+  }
+
+  size_t getPaddingAfter() const { return PaddingAfter; }
+
+  void setPaddingAfter(size_t Padding) {
+    PaddingAfter = Padding;
   }
 
   /// Return offset of the function body in the binary file.
@@ -2492,12 +2510,15 @@ inline raw_ostream &operator<<(raw_ostream &OS,
   return OS;
 }
 
-/// Compare function by index if it is valid, fall back to the original address
-/// otherwise.
+/// Compare function by index if it is valid and not identical, fall back to the
+/// original address otherwise.
 inline bool compareBinaryFunctionByIndex(const BinaryFunction *A,
                                          const BinaryFunction *B) {
-  if (A->hasValidIndex() && B->hasValidIndex())
-    return A->getIndex() < B->getIndex();
+  if (A->hasValidIndex() && B->hasValidIndex()) {
+    if (A->getIndex() != B->getIndex())
+      return A->getIndex() < B->getIndex();
+    return A->getAddress() < B->getAddress();
+  }
   if (A->hasValidIndex() && !B->hasValidIndex())
     return true;
   if (!A->hasValidIndex() && B->hasValidIndex())

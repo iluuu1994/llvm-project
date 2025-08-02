@@ -64,6 +64,7 @@
 #include <memory>
 #include <optional>
 #include <system_error>
+#include <stdlib.h>
 
 #undef  DEBUG_TYPE
 #define DEBUG_TYPE "bolt"
@@ -5810,8 +5811,12 @@ uint64_t RewriteInstance::getNewFunctionOrDataAddress(uint64_t OldAddress) {
 }
 
 void RewriteInstance::rewriteFile() {
+  rewriteFile(opts::OutputFilename);
+}
+
+void RewriteInstance::rewriteFile(std::string OutputFilename) {
   std::error_code EC;
-  Out = std::make_unique<ToolOutputFile>(opts::OutputFilename, EC,
+  Out = std::make_unique<ToolOutputFile>(OutputFilename, EC,
                                          sys::fs::OF_None);
   check_error(EC, "cannot create output executable file");
 
@@ -6002,7 +6007,7 @@ void RewriteInstance::rewriteFile() {
 
   Out->keep();
   EC = sys::fs::setPermissions(
-      opts::OutputFilename,
+      OutputFilename,
       static_cast<sys::fs::perms>(sys::fs::perms::all_all &
                                   ~sys::fs::getUmask()));
   check_error(EC, "cannot set permissions of output file");
@@ -6164,4 +6169,65 @@ bool RewriteInstance::isDebugSection(StringRef SectionName) {
     return true;
 
   return false;
+}
+
+void RewriteInstance::alignBinaries(RewriteInstance &RI2, std::string OutputFilename1, std::string OutputFilename2) {
+  std::map<std::string, uint32_t> RI1Indexes;
+  auto RI1Funcs = BC->getSortedFunctions();
+
+  uint32_t Index = 0;
+  for (auto *F : RI1Funcs) {
+    F->setIndex(Index++);
+    RI1Indexes[F->getOneName().str()] = F->getIndex();
+  }
+
+  uint32_t PrevIndex = -1U;
+  for (auto *F : RI2.BC->getSortedFunctions()) {
+    auto RI1Index = RI1Indexes.find(F->getOneName().str());
+    auto NewIndex = RI1Index != RI1Indexes.end() ? RI1Index->second : PrevIndex;
+    F->setIndex(NewIndex);
+  }
+
+  auto RI2Funcs = RI2.BC->getSortedFunctions();
+  auto Iter1 = RI1Funcs.begin();
+  auto Iter2 = RI2Funcs.begin();
+
+  /* Positive means RI1 is ahead, negative RI2 is ahead. */
+  int64_t Offset = 0;
+
+  while (Iter1 != RI1Funcs.end() && Iter2 != RI2Funcs.end()) {
+    BinaryFunction *F1 = *Iter1;
+    BinaryFunction *F2 = *Iter2;
+    int64_t F1Size = alignTo(F1->getSize(), F1->getAlign());
+    int64_t F2Size = alignTo(F2->getSize(), F2->getAlign());
+
+    if (F1->getOneName() == F2->getOneName()) {
+      if (Offset > 0)
+        F2->setPaddingBefore(Offset);
+      else if (Offset < 0)
+        F1->setPaddingBefore(abs(Offset));
+
+      Offset = F1Size - F2Size;
+      Iter1++;
+      Iter2++;
+    } else if (RI1Indexes.count(F2->getOneName().str()) == 0) {
+      Offset -= F2Size;
+      Iter2++;
+    } else {
+      Offset += F1Size;
+      Iter1++;
+    }
+  }
+
+  preregisterSections();
+  finalizeMetadataPreEmit();
+  emitAndLink();
+  updateMetadata();
+  rewriteFile(OutputFilename1);
+
+  RI2.preregisterSections();
+  RI2.finalizeMetadataPreEmit();
+  RI2.emitAndLink();
+  RI2.updateMetadata();
+  RI2.rewriteFile(OutputFilename2);
 }

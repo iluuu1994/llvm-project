@@ -100,11 +100,13 @@ size_t padFunction(std::map<std::string, size_t> &FunctionPadding,
 
 size_t padFunctionBefore(const BinaryFunction &Function) {
   static std::map<std::string, size_t> CacheFunctionPadding;
-  return padFunction(CacheFunctionPadding, FunctionPadBeforeSpec, Function);
+  size_t Padding = padFunction(CacheFunctionPadding, FunctionPadBeforeSpec, Function);
+  return Padding != 0 ? Padding : Function.getPaddingBefore();
 }
 size_t padFunctionAfter(const BinaryFunction &Function) {
   static std::map<std::string, size_t> CacheFunctionPadding;
-  return padFunction(CacheFunctionPadding, FunctionPadSpec, Function);
+  size_t Padding = padFunction(CacheFunctionPadding, FunctionPadSpec, Function);
+  return Padding != 0 ? Padding : Function.getPaddingAfter();
 }
 
 } // namespace opts

@@ -67,6 +67,8 @@ public:
   /// to fold identical functions.
   void compare(RewriteInstance &RI2);
 
+  void alignBinaries(RewriteInstance &RI2, std::string OutputFilename1, std::string OutputFilename2);
+
   /// Return binary context.
   const BinaryContext &getBinaryContext() const { return *BC; }
 
@@ -217,6 +219,8 @@ private:
   /// function. If we couldn't understand the function for some reason in
   /// disassembleFunctions(), also preserve the original version.
   void rewriteFile();
+
+  void rewriteFile(std::string OutputFilename);
 
   /// Return address of a function in the new binary corresponding to
   /// \p OldAddress address in the original binary.
