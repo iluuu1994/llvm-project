@@ -17,6 +17,8 @@
 #include "bolt/Core/Linker.h"
 #include "bolt/Rewrite/MetadataManager.h"
 #include "bolt/Utils/NameResolver.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/ObjectFile.h"
@@ -511,8 +513,12 @@ private:
   std::optional<uint64_t> PLTRelocationsAddress;
   uint64_t PLTRelocationsSize{0};
 
-  /// True if relocation of specified type came from .rela.plt
-  DenseMap<uint64_t, bool> IsJmpRelocation;
+  /// Original relocation offsets for entries read from DT_JMPREL.
+  DenseSet<uint64_t> JmpRelocationOffsets;
+
+  /// Original DT_JMPREL entry order. Some PLT implementations encode the
+  /// relocation index in the PLT stub, so the order must be preserved.
+  SmallVector<uint64_t, 0> JmpRelocationOrder;
 
   /// Index of specified symbol in the dynamic symbol table. NOTE Currently it
   /// is filled and used only with the relocations-related symbols.
